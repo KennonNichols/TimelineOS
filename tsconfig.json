@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "target": "es5",
+    "module": "none",
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "outFile": "Source.js" // Specify the output file name
+  },
+  "include": ["src/**/*.ts"] // Specify the directory containing your TypeScript files
+}

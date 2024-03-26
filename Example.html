@@ -1,0 +1,85 @@
+<script src="Source.js"></script>
+
+
+
+
+
+<canvas id="myCanvas" width="800" height="600" style="border:1px solid #000000;"></canvas>
+
+<br/>
+<br/>
+<label for="newTitleField">Title</label>
+<input id="newTitleField" type="text"/>
+<label for="newBodyField">Body</label>
+<input id="newBodyField" type="text"/>
+<label for="newDateField">Date (optional)</label>
+<input id="newDateField" type="text"/>
+<button id="newEventButton">Add new event</button>
+<br/>
+<br/>
+<label for="deleteField">Title</label>
+<input id="deleteField" type="text"/>
+<button id="deleteEventButton">Delete event</button>
+<br/>
+<br/>
+<label for="configureField">JSON configuration</label>
+<br/>
+<textarea autocomplete="off" autocapitalize="off" spellcheck="false" id="configureField" style="width:250px" rows = "20">{
+"eventCount" : 3,
+"actualScale" : false,
+"padding" : 4,
+"drawDividerLine" : false,
+"highlightColor" : "blue",
+"dateSort" : false
+}</textarea>
+<br/>
+<button id="configureButton">Configure timeline</button>
+<br/>
+<br/>
+<label for="dateTestField">Date</label>
+<input id="dateTestField" type="text"/>
+<button id="dateTestButton">-> Convert Date-></button>
+<input readonly="readonly" id="dateTestFieldOut" type="text"/>
+
+
+<script>
+    const timeline = new Timeline(document.getElementById('myCanvas'));
+
+    timeline.addEvent("Founding", "In 1971 the Hingerman Hot Dog corporation was founded, intending to compete with Frankfurt's Frankfurts by creating a monopoly 50 years before it's founding.","1971y");
+    timeline.addEvent("Merger", "In 1980 the Hingerman Hot Dog corporation merged with every other European food company West of the Iron Curtain.","1980y");
+    timeline.addEvent("Further acquisitions", "In February of 1981 the Iron Curtain fell over due to rusting, allowing Hingerman to purchase a large number of Soviet food produces.","1981y2m");
+    timeline.addEvent("Backpedaling", "In June of 1981 Hingerman sold all Soviet food producers back to Russia after realising they had no food to sell.","1981y6m");
+    timeline.addEvent("The Pig", "In 1982 the Pig catastrophe caused the near collapse of the Hingerman food corporation.","1982y");
+    timeline.addEvent("Collapse", "In 1985 the Hingerman food corporation completely collapsed, unable to recover from the Pig catastrophe.","1985y");
+    timeline.addEvent("Hingerman dies", "In 1992 Johann Hingerman fell deathly ill after contracting the bubonic plague. He died on February 30th, 1992.","1992y");
+    timeline.addEvent("Hingerman is born", "In 2007 Johann Hingerman was born.","2007y");
+    timeline.addEvent("Hingerman's Hot Dog Stand", "In 2009 Johann Hingerman opened a street stand selling his patented \"Brat Dog\" bratwurst hot dogs.","2009y");
+    timeline.addEvent("Frankfurt's Frankfurts", "In 2021 Franz Frankfurt began selling revolutionary hot dogs which spiked in popularity after he invented his signature technique of cooking the hotdogs by applying heat. It was far more popular than Hingerman's frozen hot dogs.","2021y");
+    timeline.addEvent("Tough competition", "By 2023 Frankfurt's Frankfurts made it's first billion Euros.","2023y");
+    timeline.addEvent("An empire fallen", "In November of 2023, Hingerman filed for bankruptcy, unable to compete with Franz Frankfurt.","2023y11m");
+    timeline.addEvent("Assassination", "In 2222 Johann Hingerman assassinating God King Franz Frankfurt and fled into the past, avoiding chase from time cops by paying them in a future which never happened.","2222y");
+
+
+
+
+
+    document.getElementById("deleteEventButton").addEventListener("click", function() {
+        timeline.removeEvent(document.getElementById("deleteField").value);
+    });
+
+    document.getElementById("newEventButton").addEventListener("click", function() {
+        timeline.addEvent(document.getElementById("newTitleField").value, document.getElementById("newBodyField").value, document.getElementById("newDateField").value);
+    });
+
+    document.getElementById("configureButton").addEventListener("click", function() {
+        timeline.configure(document.getElementById("configureField").value);
+    });
+
+    document.getElementById("dateTestButton").addEventListener("click", function() {
+
+        const date = parseDate(document.getElementById("dateTestField").value);
+
+        document.getElementById("dateTestFieldOut").value = readDate(date);
+
+    });
+</script>
