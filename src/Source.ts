@@ -9,7 +9,6 @@ class Timeline {
         this.canvas.addEventListener('click', (event: MouseEvent) => {
             this.handleClick(event)
         });
-
         this.canvas.addEventListener('mousemove', (event: MouseEvent) => {
             this.handleMouseMove(event)
         });
@@ -23,27 +22,37 @@ class Timeline {
             this.handleMouseOut(event)
         });
 
+        this.canvas.addEventListener("dblclick", (event: MouseEvent) => {
+            this.handleDoubleClick(event)
+        });
+
+        this.scaleCanvas();
+        this.reloadTimeline(true, true);
     }
 
     configure(json : string) {
-        this.timelineConfig.reconfigure(json);
-        this.reloadTimeline();
+        let needsResetting: boolean = this.timelineConfig.reconfigure(json);
+        this.reloadTimeline(needsResetting, needsResetting);
     }
 
+    get resolutionScale(): number {
+        return this.timelineConfig.resolutionScale;
+    }
 
-
-
-
-    //HTMLCanvasElement
     canvas : HTMLCanvasElement;
-    //CanvasRenderingContext2D
     context : CanvasRenderingContext2D;
-    //TimelineEvent[]
+    //The events on the timeline
     events : TimelineEvent[] = [];
+    //The points at which the events are drawn
+    points : Point[] = [];
+    //The total width of the timeline
+    totalWidth: number = 0;
+    totalHeight: number = 0;
+
     //Create default TimelineConfig
     timelineConfig : TimelineConfig = new TimelineConfig();
     //This is how far along the timeline you are
-    xShift = 0;
+    shift: Point = new Point(0, 0);
 
     // This does nothing but draw a rectangle on your canvas, padded by "edge" amount of pixels.
     drawTest(edge: number) {
@@ -74,58 +83,99 @@ class Timeline {
     }
     //endregion
 
-    draw() {
-        const width = this.getWidth();
+    getStandardXStep() {
+        return (this.getWidth() / this.timelineConfig.eventCount);
+    }
+    getStandardYStep() {
+        return (this.getHeight() / this.timelineConfig.eventCount);
+    }
 
-        let y = this.getHeight() / 2;
-        let xStep = width / this.timelineConfig.eventCount;
-        //x starts at half a step to prevent any large blank space, then add the xShift;
-        let x = xStep / 2 + this.xShift;
+    draw() {
+
         let context = this.context;
+        const width = this.getWidth();
+        const height = this.getHeight()
 
 
         // Clear the canvas
-        context.clearRect(0, 0, width, this.getHeight());
+        context.clearRect(0, 0, width * this.resolutionScale, height * this.resolutionScale);
+        context.lineWidth = 1;
+
+        if (this.events.length > 0) {
 
 
-        // Draw the line from the first node to the last node
-        context.beginPath();
-        context.moveTo(x, y);
-        context.lineTo(x + xStep * (this.events.length - 1), y);
-        context.stroke();
+            // Draw the line from the first node to the last node
+            drawLine(context, this.resolutionScale, this.points[0].x  + this.shift.x, this.points[0].y + this.shift.y, this.points[this.points.length - 1].x + this.shift.x, this.points[this.points.length - 1].y + this.shift.y);
+
+            const drawnEvents : TimelineEvent[] = [];
+
+            //for (const eventIndex in this.events) {
+            for (let eventIndex = 0; eventIndex < this.events.length; eventIndex++) {
+                let event: TimelineEvent = this.events[eventIndex];
+                let x: number = this.points[eventIndex].x + this.shift.x;
+                let y: number = this.points[eventIndex].y + this.shift.y;
+
+                //If we are off the left side or top, don't draw it
+                if (x <= - this.getStandardXStep() || y <= - this.getStandardYStep()) {
+                    continue;
+                }
 
 
+                event.draw(context, this, x, y);
+                drawnEvents.push(event);
 
-        for (const event of this.events) {
-            event.draw(context, this.timelineConfig, x, y);
+                //If we are off the right side or bottom, stop drawing
+                if (x >= width || y >= height - this.getTop()) {
+                    break;
+                }
+            }
 
-            if (x >= width) {
-                return;
+            for (let event of drawnEvents) {
+                event.drawLate(context, this);
             }
 
 
-            x += xStep;
         }
     }
 
     //Add a simple text-only event to the timeline.
-    addEvent(title : string, body : string, date : string = "") {
-        let timelineEvent = new TimelineEvent(body, title, parseDate(date));
-        //Add the equivalent of 3 events of whitespace
-        timelineEvent.width = this.getWidth() / (this.timelineConfig.eventCount + 3);
+    addEvent(title : string, body : string, date : string | String | Date = "", titleTranslations : string = "{}", translations : string = "{}") {
+        let parsedDate: ParsedDate;
+
+        //Javascript you scare me sometimes :(
+        if (typeof date === "string") {
+            parsedDate = parseDate(date);
+        }
+        else if (date instanceof String) {
+            parsedDate = parseDate(date.toString());
+        }
+        else {
+            parsedDate = parseDateFromJavascript(date);
+        }
+
+        let titleTranslationDictionary : object = JSON.parse(titleTranslations);
+        let translationDictionary : object = JSON.parse(translations);
+
+        let timelineEvent = new TimelineEvent(body, title, parsedDate, titleTranslationDictionary, translationDictionary);
         timelineEvent.height = this.getHeight() / 3;
         this.events.push(timelineEvent);
-        this.reloadTimeline();
+        this.reloadTimeline(false, true);
     }
 
 
 
 
-
-    //Remove ALL events with a title matching "title".
+    //Remove ALL events with a title matching <title>.
     removeEvent(title : string) {
-        this.events = this.events.filter(function(timelineEvent : TimelineEvent){return timelineEvent.getTitle() !== title});
-        this.reloadTimeline();
+        this.events = this.events.filter(function(timelineEvent : TimelineEvent){return timelineEvent.getTitle(null) !== title});
+        this.reloadTimeline(true, true);
+    }
+
+    private scaleCanvas() {
+        this.canvas.style.width = this.getWidth() + 'px';
+        this.canvas.style.height = this.getHeight() + 'px';
+        this.canvas.width = this.getWidth() * this.resolutionScale;
+        this.canvas.height = this.getHeight() * this.resolutionScale;
     }
 
 
@@ -157,30 +207,59 @@ class Timeline {
          */
     }
 
-    private clampXShift() {
-        let minShift = - this.getWidth() / this.timelineConfig.eventCount * (this.events.length - this.timelineConfig.eventCount);
+    private clampShift() {
+        if (this.timelineConfig.verticalLayout) {
 
-        if (this.xShift < minShift) {
-            this.xShift = minShift;
+            let minShiftY = -this.totalHeight;
+
+            //clamp y
+            if (this.shift.y < minShiftY) {
+                this.shift.y = minShiftY;
+            }
+            else if (this.shift.y > 0) {
+                this.shift.y = 0;
+            }
         }
+        else {
+            let minShiftX = -this.totalWidth;
 
-        if (this.xShift > 0) {
-            this.xShift = 0;
+            //clamp x
+            if (this.shift.x < minShiftX) {
+                this.shift.x = minShiftX;
+            }
+            else if (this.shift.x > 0) {
+                this.shift.x = 0;
+            }
         }
     }
 
-    private handleMouseMove(e : any) {
+    private handleMouseMove(e : MouseEvent) {
         if (this.mouseHeld) {
-            //Calculate how far the mouse was dragged
-            let mouseX = e.clientX - this.getLeft();
-            let xChange = mouseX - this.clickOriginX;
+            this.atStart = false;
 
-            //Record new X position
-            this.clickOriginX = mouseX;
-
-            //Shift the timeline
-            this.xShift += xChange;
+            //Shift the timeline vertically if we are vertical
+            if (this.timelineConfig.verticalLayout) {
+                //Calculate how far the mouse was dragged horizontally
+                let mouseY = e.clientY - this.getTop();
+                let yChange = mouseY - this.clickOriginY;
+                //Record new Y position
+                this.clickOriginY = mouseY;
+                this.shift.y += yChange;
+            }
+            //Horizontally if we are horizontal
+            else {
+                //Calculate how far the mouse was dragged horizontally
+                let mouseX = e.clientX - this.getLeft();
+                let xChange = mouseX - this.clickOriginX;
+                //Record new X position
+                this.clickOriginX = mouseX;
+                this.shift.x += xChange;
+            }
             this.reloadTimeline();
+        }
+
+        for (const event of this.events) {
+            event.onMouseMove(e, this);
         }
     }
 
@@ -191,10 +270,10 @@ class Timeline {
 
         //If the mouse went down in the canvas
         if (
-            mouseX > this.getLeft() &&
-            mouseX < this.getLeft() + this.getWidth() &&
-            mouseY > this.getTop() &&
-            mouseY < this.getTop() + this.getHeight()
+            mouseX > 0 &&
+            mouseX < this.getWidth() &&
+            mouseY > 0 &&
+            mouseY < this.getHeight()
         ) {
             //Start dragging
             this.mouseHeld = true;
@@ -211,12 +290,31 @@ class Timeline {
         this.mouseHeld = false;
     }
 
+    private atStart: boolean = true;
+    private savedPoint: Point = new Point(0, 0);
+
+    private handleDoubleClick(event: MouseEvent) {
+        if (this.atStart) {
+            //Return to saved point
+            this.shift = this.savedPoint;
+            this.clampShift();
+            this.atStart = false;
+        }
+        else {
+            //Go to the start
+            this.savedPoint = this.shift;
+            this.shift = new Point(0, 0);
+            this.atStart = true;
+        }
+        this.draw()
+    }
+
     private sort() {
         if (this.timelineConfig.dateSort) {
 
             this.events = this.events.sort((a, b) => {
                 // Compare years
-                const aYear = a.date.year ?? 0;
+                /*const aYear = a.date.year ?? 0;
                 const bYear = b.date.year ?? 0;
                 if (a.date.year !== b.date.year) {
                     return aYear - bYear;
@@ -246,7 +344,9 @@ class Timeline {
                 // Finally, compare minutes, treating null as 0
                 const aMinute = a.date.minute ?? 0;
                 const bMinute = b.date.minute ?? 0;
-                return aMinute - bMinute;
+                return aMinute - bMinute;*/
+
+                return Number(a.date.getTimeInMinutes() - b.date.getTimeInMinutes());
             });
 
 
@@ -256,17 +356,57 @@ class Timeline {
         }
     }
 
-    private reloadTimeline() {
-        this.clampXShift();
+    private reloadTimeline(reset: boolean = false, reposition: boolean = false) {
         this.sort();
+
+        if (reset) {
+            //Navigate back to the start of the timeline
+            this.shift = new Point(0, 0)
+            this.savedPoint = new Point(0, 0)
+            this.atStart = true;
+            this.scaleCanvas();
+
+            for (let event of this.events) {
+                event.invalidateParcel();
+            }
+        }
+
+
+        if (reposition) {
+            this.repositionTimeline();
+        }
+
+
+        this.resizeEvents();
+        this.clampShift();
         this.draw();
     }
+
+    private resizeEvents() {
+        //Add the equivalent of 3 events of whitespace
+        let width: number= this.getWidth() / (this.timelineConfig.eventCount + 3);
+        if (this.timelineConfig.layoutTechnique == "mixed") {
+            //Double wide if we are using mixed layout
+            width = width * 2;
+        }
+
+        for (let e of this.events) {
+            e.width = width;
+        }
+    }
+
+    private repositionTimeline() {
+
+        let startingPoint: Point;
+
+        if (this.timelineConfig.verticalLayout) {
+            startingPoint = Point.add(this.shift, new Point(this.getWidth() / 2, this.getStandardYStep() / 2));
+        }
+        else {
+            startingPoint = Point.add(this.shift, new Point(this.getStandardXStep() / 2, this.getHeight() / 2));
+        }
+
+
+        LayoutManager.setScaledEventPositions(this, startingPoint);
+    }
 }
-
-
-
-
-
-
-
-
