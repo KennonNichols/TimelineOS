@@ -23,24 +23,6 @@ interface ParcelizedTextBox {
     width: number;
 }
 
-class NumberVessel {
-    private value: number;
-    constructor(value: number) {
-        this.value = value;
-    }
-
-    public increment(adder: number) {
-        this.value += adder;
-    }
-
-    public get() : number {
-        return this.value;
-    }
-
-    public set(value: number) {
-        this.value = value;
-    }
-}
 
 
 function minimumParcelizedBox(startingWidth: number, startingHeight: number, ctx: CanvasRenderingContext2D, scale: number, fontSizeGoal: number, padding: number, text: string): ParcelizedTextBox {
@@ -53,17 +35,20 @@ function minimumParcelizedBox(startingWidth: number, startingHeight: number, ctx
     //How much we multiply the size each time to find a box of best fit.
     const expansionCheckMultiplier: number = 1.01;
 
+    ctx.font = fontSizeGoal * 2 + 'px Arial'; // set font size
+    const metrics = ctx.measureText("");
+    const lineHeight = (metrics.fontBoundingBoxDescent + metrics.fontBoundingBoxAscent + padding) / scale;
+
+
     while (true) {
-        let totalHeight = new NumberVessel(0);
+        let totalHeight = { value : lineHeight};
 
         outgoingLines = splitByLines(ctx, scale, padding, totalHeight, words, width);
 
 
 
         // Check if totalHeight fits within
-        if (totalHeight.get() <= height - padding * 2) {
-            const metrics = ctx.measureText("");
-            const lineHeight = (metrics.fontBoundingBoxDescent + metrics.fontBoundingBoxAscent + padding) / scale;
+        if (totalHeight.value <= height - padding * 2) {
             return {
                 height: height,
                 width: width,
@@ -96,17 +81,17 @@ function parcelizeText(
     minFontSize: number) : ParcelizedWrappableText {
     let words: string[] = text.split(' ');
     let lines: string[] = [];
-    let totalHeight: NumberVessel = new NumberVessel(0);
+    let totalHeight = { value : 0};
     let fontSize = maxFontSize;
 
     while (fontSize > 0) {
         ctx.font = fontSize * 2 + 'px Arial'; // set font size
-        totalHeight.set(fontSize);
+        totalHeight.value = fontSize;
 
         lines = splitByLines(ctx, scale, padding, totalHeight, words, maxWidth);
 
         // Check if totalHeight exceeds maxHeight
-        if (totalHeight.get() <= maxHeight - padding * 2) break;
+        if (totalHeight.value <= maxHeight - padding * 2) break;
 
         // Decrease font size and clear lines array
         fontSize--;
@@ -123,7 +108,7 @@ function parcelizeText(
     if (compressed) {
         //We run it back, but it's only minimum size
         ctx.font = minFontSize * 2 + 'px Arial'; // set font size
-        totalHeight.set(minFontSize);
+        totalHeight.value = minFontSize;
         compressedLines = splitByLines(ctx, scale, padding, totalHeight, words, maxWidth, maxHeight);
 
     }
@@ -144,7 +129,7 @@ function parcelizeText(
 }
 
 
-function splitByLines(ctx: CanvasRenderingContext2D, scale: number, padding: number, totalHeight: NumberVessel, words : string[], maxWidth: number, maxHeight: number = -1) : string[] {
+function splitByLines(ctx: CanvasRenderingContext2D, scale: number, padding: number, totalHeight: { value : number }, words : string[], maxWidth: number, maxHeight: number = -1) : string[] {
     let lines: string[] = [];
     let line = "";
     for (let i = 0; i < words.length; i++) {
@@ -153,11 +138,11 @@ function splitByLines(ctx: CanvasRenderingContext2D, scale: number, padding: num
         let testWidth = metrics.width / scale;
         const lineHeight = (metrics.fontBoundingBoxDescent + metrics.fontBoundingBoxAscent + padding) / scale
         if (testWidth > maxWidth - padding * 2 && i > 0) {
-            totalHeight.increment(lineHeight);
+            totalHeight.value += lineHeight;
             lines.push(line.trim());
 
             //If we have broken our line constraints
-            if (maxHeight > 0 && totalHeight.get() >= maxHeight) {
+            if (maxHeight > 0 && totalHeight.value >= maxHeight) {
                 line = line.slice(0, -3).trim() + "...";
                 lines.pop();
                 break;

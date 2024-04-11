@@ -205,9 +205,9 @@ class TimelineEvent {
         }
 
 
-        //Draw thicker if we are being hovered
+        //Draw thicker if we are being hovered or popped out
         //context.lineWidth = this.hovered ? 3 : 1;
-        context.lineWidth = this.hovered ? (this.popup ? 10 : 3) : 1;
+        context.lineWidth = (this.hovered || this.popup) ? 3 : 1;
 
 
         // Draw divider line
@@ -223,9 +223,10 @@ class TimelineEvent {
 
     //Draw the popup only after all other things have been drawn
     drawLate(context: CanvasRenderingContext2D, timeline: Timeline) {
-        console.log(this.popup);
+
         if (this.popup) {
             const config = timeline.timelineConfig;
+            const scale = timeline.resolutionScale
 
             //Get the parcelized box
             if (!this.popupParcel) {
@@ -233,7 +234,7 @@ class TimelineEvent {
                     config.verticalLayout? this.height: this.width,
                     config.verticalLayout? this.width: this.height,
                     context,
-                    timeline.resolutionScale,
+                    scale,
                     config.maxFontSize,
                     config.padding,
                     this.getBody(config.userLanguage)
@@ -241,7 +242,21 @@ class TimelineEvent {
                 //this.popupParcel = parcelizeText(context, timeline.resolutionScale, this.getBody(timeline.timelineConfig.userLanguage), )
             }
 
-            drawWrappedTextPrecalculated(context, timeline.resolutionScale, 0, 0, this.popupParcel.width, this.popupParcel.height, this.popupParcel.text, config.padding);
+            let position = this.getPopupPosition(timeline, this.popupParcel);
+
+
+
+            // Draw popup
+            context.beginPath();
+            context.fillStyle = "white";
+            context.fillRect(position.x * scale, position.y * scale,  this.popupParcel.width * scale, this.popupParcel.height * scale);
+            context.fillStyle = "black";
+            context.strokeRect(position.x * scale, position.y * scale,  this.popupParcel.width * scale, this.popupParcel.height * scale);
+
+
+
+            context.fillStyle = config.highlightColor;
+            drawWrappedTextPrecalculated(context, timeline.resolutionScale, position.x, position.y, this.popupParcel.width, this.popupParcel.height, this.popupParcel.text, config.padding);
 
 
         }

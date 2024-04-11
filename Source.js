@@ -10,20 +10,6 @@ var LineSide;
     LineSide[LineSide["TOP"] = 0] = "TOP";
     LineSide[LineSide["BOTTOM"] = 1] = "BOTTOM";
 })(LineSide || (LineSide = {}));
-class NumberVessel {
-    constructor(value) {
-        this.value = value;
-    }
-    increment(adder) {
-        this.value += adder;
-    }
-    get() {
-        return this.value;
-    }
-    set(value) {
-        this.value = value;
-    }
-}
 function minimumParcelizedBox(startingWidth, startingHeight, ctx, scale, fontSizeGoal, padding, text) {
     let width = startingWidth;
     let height = startingHeight;
@@ -31,13 +17,14 @@ function minimumParcelizedBox(startingWidth, startingHeight, ctx, scale, fontSiz
     const words = text.split(" ");
     //How much we multiply the size each time to find a box of best fit.
     const expansionCheckMultiplier = 1.01;
+    ctx.font = fontSizeGoal * 2 + 'px Arial'; // set font size
+    const metrics = ctx.measureText("");
+    const lineHeight = (metrics.fontBoundingBoxDescent + metrics.fontBoundingBoxAscent + padding) / scale;
     while (true) {
-        let totalHeight = new NumberVessel(0);
+        let totalHeight = { value: lineHeight };
         outgoingLines = splitByLines(ctx, scale, padding, totalHeight, words, width);
         // Check if totalHeight fits within
-        if (totalHeight.get() <= height - padding * 2) {
-            const metrics = ctx.measureText("");
-            const lineHeight = (metrics.fontBoundingBoxDescent + metrics.fontBoundingBoxAscent + padding) / scale;
+        if (totalHeight.value <= height - padding * 2) {
             return {
                 height: height,
                 width: width,
@@ -60,14 +47,14 @@ function minimumParcelizedBox(startingWidth, startingHeight, ctx, scale, fontSiz
 function parcelizeText(ctx, scale, text, maxWidth, maxHeight, padding = 3, maxFontSize, minFontSize) {
     let words = text.split(' ');
     let lines = [];
-    let totalHeight = new NumberVessel(0);
+    let totalHeight = { value: 0 };
     let fontSize = maxFontSize;
     while (fontSize > 0) {
         ctx.font = fontSize * 2 + 'px Arial'; // set font size
-        totalHeight.set(fontSize);
+        totalHeight.value = fontSize;
         lines = splitByLines(ctx, scale, padding, totalHeight, words, maxWidth);
         // Check if totalHeight exceeds maxHeight
-        if (totalHeight.get() <= maxHeight - padding * 2)
+        if (totalHeight.value <= maxHeight - padding * 2)
             break;
         // Decrease font size and clear lines array
         fontSize--;
@@ -80,7 +67,7 @@ function parcelizeText(ctx, scale, text, maxWidth, maxHeight, padding = 3, maxFo
     if (compressed) {
         //We run it back, but it's only minimum size
         ctx.font = minFontSize * 2 + 'px Arial'; // set font size
-        totalHeight.set(minFontSize);
+        totalHeight.value = minFontSize;
         compressedLines = splitByLines(ctx, scale, padding, totalHeight, words, maxWidth, maxHeight);
     }
     else {
@@ -103,10 +90,10 @@ function splitByLines(ctx, scale, padding, totalHeight, words, maxWidth, maxHeig
         let testWidth = metrics.width / scale;
         const lineHeight = (metrics.fontBoundingBoxDescent + metrics.fontBoundingBoxAscent + padding) / scale;
         if (testWidth > maxWidth - padding * 2 && i > 0) {
-            totalHeight.increment(lineHeight);
+            totalHeight.value += lineHeight;
             lines.push(line.trim());
             //If we have broken our line constraints
-            if (maxHeight > 0 && totalHeight.get() >= maxHeight) {
+            if (maxHeight > 0 && totalHeight.value >= maxHeight) {
                 line = line.slice(0, -3).trim() + "...";
                 lines.pop();
                 break;
@@ -1112,9 +1099,9 @@ class TimelineEvent {
         else {
             drawWrappedTextPrecalculated(context, scale, leftBound, topBound + headerHeight, width, bodyHeight, this.savedParcel, timelineConfig.padding);
         }
-        //Draw thicker if we are being hovered
+        //Draw thicker if we are being hovered or popped out
         //context.lineWidth = this.hovered ? 3 : 1;
-        context.lineWidth = this.hovered ? (this.popup ? 10 : 3) : 1;
+        context.lineWidth = (this.hovered || this.popup) ? 3 : 1;
         // Draw divider line
         if (timelineConfig.drawDividerLine) {
             drawLine(context, scale, leftBound + timelineConfig.padding, topBound + headerHeight, leftBound + width - timelineConfig.padding, topBound + headerHeight);
@@ -1126,16 +1113,62 @@ class TimelineEvent {
     }
     //Draw the popup only after all other things have been drawn
     drawLate(context, timeline) {
-        console.log(this.popup);
         if (this.popup) {
             const config = timeline.timelineConfig;
+            const scale = timeline.resolutionScale;
             //Get the parcelized box
             if (!this.popupParcel) {
-                this.popupParcel = minimumParcelizedBox(config.verticalLayout ? this.height : this.width, config.verticalLayout ? this.width : this.height, context, timeline.resolutionScale, config.maxFontSize, config.padding, this.getBody(config.userLanguage));
+                this.popupParcel = minimumParcelizedBox(config.verticalLayout ? this.height : this.width, config.verticalLayout ? this.width : this.height, context, scale, config.maxFontSize, config.padding, this.getBody(config.userLanguage));
                 //this.popupParcel = parcelizeText(context, timeline.resolutionScale, this.getBody(timeline.timelineConfig.userLanguage), )
             }
-            drawWrappedTextPrecalculated(context, timeline.resolutionScale, 0, 0, this.popupParcel.width, this.popupParcel.height, this.popupParcel.text, config.padding);
-            console.log(this.popupParcel.text.fullTextLines);
+            let position = this.getPopupPosition(timeline, this.popupParcel);
+            // Draw popup
+            context.beginPath();
+            context.fillStyle = "white";
+            context.fillRect(position.x * scale, position.y * scale, this.popupParcel.width * scale, this.popupParcel.height * scale);
+            context.fillStyle = "black";
+            context.strokeRect(position.x * scale, position.y * scale, this.popupParcel.width * scale, this.popupParcel.height * scale);
+            context.fillStyle = config.highlightColor;
+            drawWrappedTextPrecalculated(context, timeline.resolutionScale, position.x, position.y, this.popupParcel.width, this.popupParcel.height, this.popupParcel.text, config.padding);
         }
+    }
+    /*is_hovered(x: number, y: number) {
+        return (x > this.x - this.width / 2 && x < this.x + this.width / 2 && y > this.y + 10 && y < this.y + this.height + 10);
+    }*/
+    getPopupPosition(timeline, popupParcel) {
+        const canvasWidth = timeline.getWidth();
+        const canvasHeight = timeline.getHeight();
+        // Coordinates of the event card
+        const cardTop = this.y;
+        const cardBottom = this.y + this.height;
+        const cardLeft = this.x;
+        const cardRight = this.x + this.width;
+        // Possible positions for the popup
+        let bestX = this.x; // Initialize with default as the top-right corner of the card
+        let bestY = this.y;
+        // Check space on the right side
+        if (cardRight + popupParcel.width <= canvasWidth) {
+            bestX = cardRight; // Align popup's left edge with card's right edge
+            bestY = cardTop; // Align popup's top edge with card's top edge
+        }
+        else if (cardLeft - popupParcel.width >= 0) {
+            // Not enough space on the right, check the left side
+            bestX = cardLeft - popupParcel.width; // Align popup's right edge with card's left edge
+            bestY = cardTop; // Align popup's top edge with card's top edge
+        }
+        else if (cardBottom + popupParcel.height <= canvasHeight) {
+            // Not enough space on the left, check below
+            bestX = cardLeft; // Align popup's left edge with card's left edge
+            bestY = cardBottom; // Align popup's top edge with card's bottom edge
+        }
+        else if (cardTop - popupParcel.height >= 0) {
+            // Not enough space below, check above
+            bestX = cardLeft; // Align popup's left edge with card's left edge
+            bestY = cardTop - popupParcel.height; // Align popup's bottom edge with card's top edge
+        }
+        // Ensure popup is completely inside the canvas
+        bestX = Math.max(0, Math.min(bestX, canvasWidth - popupParcel.width));
+        bestY = Math.max(0, Math.min(bestY, canvasHeight - popupParcel.height));
+        return { x: bestX, y: bestY };
     }
 }
