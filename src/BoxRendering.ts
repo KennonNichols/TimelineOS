@@ -25,15 +25,12 @@ interface ParcelizedTextBox {
 
 
 
-function minimumParcelizedBox(startingWidth: number, startingHeight: number, ctx: CanvasRenderingContext2D, scale: number, fontSizeGoal: number, padding: number, text: string): ParcelizedTextBox {
+function minimumParcelizedBox(startingWidth: number, startingHeight: number, ctx: CanvasRenderingContext2D, scale: number, fontSizeGoal: number, expansionCheckMultiplier: number, padding: number, text: string): ParcelizedTextBox {
 
     let width = startingWidth;
     let height = startingHeight;
     let outgoingLines: string[];
     const words: string[] = text.split(" ");
-
-    //How much we multiply the size each time to find a box of best fit.
-    const expansionCheckMultiplier: number = 1.01;
 
     ctx.font = fontSizeGoal * 2 + 'px Arial'; // set font size
     const metrics = ctx.measureText("");
@@ -170,6 +167,7 @@ function drawWrappedTextPrecalculated(
     parcel: ParcelizedWrappableText,
     padding: number = 3,
     justify: Justify = Justify.LEFT,
+    verticalJustify: Justify = Justify.LEFT,
     lineSide: LineSide = LineSide.TOP,
     color: string= 'black'
 ) {
@@ -222,6 +220,7 @@ function drawWrappedText(
     maxHeight: number,
     padding: number = 3,
     justify: Justify = Justify.LEFT,
+    verticalJustify: Justify = Justify.LEFT,
     lineSide: LineSide = LineSide.TOP,
     fontSize: number = 16,
     minFontSize: number = 0,
@@ -249,6 +248,7 @@ function drawWrappedText(
         parcel,
         padding,
         justify,
+        verticalJustify,
         lineSide,
         color
     )

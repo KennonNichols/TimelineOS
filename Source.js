@@ -10,13 +10,11 @@ var LineSide;
     LineSide[LineSide["TOP"] = 0] = "TOP";
     LineSide[LineSide["BOTTOM"] = 1] = "BOTTOM";
 })(LineSide || (LineSide = {}));
-function minimumParcelizedBox(startingWidth, startingHeight, ctx, scale, fontSizeGoal, padding, text) {
+function minimumParcelizedBox(startingWidth, startingHeight, ctx, scale, fontSizeGoal, expansionCheckMultiplier, padding, text) {
     let width = startingWidth;
     let height = startingHeight;
     let outgoingLines;
     const words = text.split(" ");
-    //How much we multiply the size each time to find a box of best fit.
-    const expansionCheckMultiplier = 1.01;
     ctx.font = fontSizeGoal * 2 + 'px Arial'; // set font size
     const metrics = ctx.measureText("");
     const lineHeight = (metrics.fontBoundingBoxDescent + metrics.fontBoundingBoxAscent + padding) / scale;
@@ -108,7 +106,7 @@ function splitByLines(ctx, scale, padding, totalHeight, words, maxWidth, maxHeig
     return lines;
 }
 //For if we have already separately calculated text size and spacing
-function drawWrappedTextPrecalculated(ctx, scale, x, y, maxWidth, maxHeight, parcel, padding = 3, justify = Justify.LEFT, lineSide = LineSide.TOP, color = 'black') {
+function drawWrappedTextPrecalculated(ctx, scale, x, y, maxWidth, maxHeight, parcel, padding = 3, justify = Justify.LEFT, verticalJustify = Justify.LEFT, lineSide = LineSide.TOP, color = 'black') {
     //console.log("Font size is: " + parcel.fontSize);
     //console.log("Is parcel compressed: " + parcel.compressed);
     ctx.font = parcel.fontSize * 2 + 'px Arial'; // set font size
@@ -137,9 +135,9 @@ function drawWrappedTextPrecalculated(ctx, scale, x, y, maxWidth, maxHeight, par
         ctx.fillText(parcel.compressedTextLines[i], lineX * scale, lineY * scale);
     }
 }
-function drawWrappedText(ctx, scale, text, x, y, maxWidth, maxHeight, padding = 3, justify = Justify.LEFT, lineSide = LineSide.TOP, fontSize = 16, minFontSize = 0, color = 'black') {
+function drawWrappedText(ctx, scale, text, x, y, maxWidth, maxHeight, padding = 3, justify = Justify.LEFT, verticalJustify = Justify.LEFT, lineSide = LineSide.TOP, fontSize = 16, minFontSize = 0, color = 'black') {
     let parcel = parcelizeText(ctx, scale, text, maxWidth, maxHeight, padding, fontSize, minFontSize);
-    drawWrappedTextPrecalculated(ctx, scale, x, y, maxWidth, maxHeight, parcel, padding, justify, lineSide, color);
+    drawWrappedTextPrecalculated(ctx, scale, x, y, maxWidth, maxHeight, parcel, padding, justify, verticalJustify, lineSide, color);
     return parcel;
 }
 function drawLinePoint(ctx, scale, start, end) {
@@ -582,10 +580,37 @@ class Timeline {
         });
         this.scaleCanvas();
         this.reloadTimeline(true, true);
+        /*let query = {
+        "q": [
+            "This should translate automatically."
+        ],
+        "target" : "${this.timelineConfig.userLanguage}"
+        
+        };
+
+        let apiUrl = 'https://translation.googleapis.com/language/translate/v2';
+
+        fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer ' + accessToken,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(query);
+        })
+            .then(response => response.json())
+            .then(data => console.log(data))
+            .catch(error => console.error('Error:', error));
+
+        //console.log()*/
     }
     configure(json) {
         let needsResetting = this.timelineConfig.reconfigure(json);
         this.reloadTimeline(needsResetting, needsResetting);
+    }
+    resize() {
+        this.resizeEvents();
+        this.reloadTimeline(true, true);
     }
     get resolutionScale() {
         return this.timelineConfig.resolutionScale;
@@ -861,9 +886,11 @@ class Timeline {
     repositionTimeline() {
         let startingPoint;
         if (this.timelineConfig.verticalLayout) {
-            startingPoint = Point.add(this.shift, new Point(this.getWidth() / 2, this.getStandardYStep() / 2));
+            // Full y step in vertical
+            startingPoint = Point.add(this.shift, new Point(this.getWidth() / 2, this.getStandardYStep()));
         }
         else {
+            // Only half a step in horizontal
             startingPoint = Point.add(this.shift, new Point(this.getStandardXStep() / 2, this.getHeight() / 2));
         }
         LayoutManager.setScaledEventPositions(this, startingPoint);
@@ -883,7 +910,7 @@ class TimelineConfig {
         // Whether to draw the line separating the title from the body
         this.drawDividerLine = true;
         // The highlight color of the timeline
-        this.highlightColor = "red";
+        this.highlightColor = "#9c1124";
         // Whether to sort by date, or by entry order
         this.dateSort = true;
         // Whether to use metric or American date format (default: false (American))
@@ -900,7 +927,15 @@ class TimelineConfig {
         this.maxFontSize = 16;
         // Same thing.
         this.minFontSize = 12;
-        this.configurableFields = ["eventCount", "actualScale", "verticalLayout", "layoutTechnique", "padding", "drawDividerLine", "highlightColor", "dateSort", "metricDateFormat", "metricTimeFormat", "languageDateFormat", "resolutionScale", "maxFontSize", "minFontSize"];
+        // Time it takes (in milliseconds) for the timeline popups to expand to full size.
+        this.popupTime = 500;
+        // "Developer" values. These are values that affect internal functions. Improper config can break the site, and it is unlikely you will ever need to tweak these. Here be dragons.
+        // This is the factor by which a box is increased to find the box of best fit around text. For example, when finding the smallest possible box that can fit a piece of text.
+        // Higher values will make a minor performance improvement, but worse fit. Smaller values will require slightly more calculation the first time a popup is opened, but will make a much cleaner fit.
+        // !!! Values less than or equal to '1' will cause an infinite loop and break the site.
+        this.fitExpansionRate = 1.01;
+        this.configurableFields = ["eventCount", "actualScale", "verticalLayout", "layoutTechnique", "padding", "drawDividerLine", "highlightColor", "dateSort", "metricDateFormat", "metricTimeFormat", "languageDateFormat", "resolutionScale", "maxFontSize", "minFontSize", "popupTime",
+            "fitExpansionRate"];
         // Fields that, when changed, force the timeline to reset to prevent it breaking
         this.resettingFields = ["eventCount", "actualScale", "verticalLayout", "dateSort", "layoutTechnique", "resolutionScale", "maxFontSize", "minFontSize"];
         // Nonconfigurables
@@ -922,7 +957,8 @@ class TimelineConfig {
         "languageDateFormat" : true,
         "resolutionScale" : 1,
         "maxFontSize" : 20,
-        "minFontSize" : 12
+        "minFontSize" : 12,
+        "popupTime" : 0
     }
 
     This should NOT be called by the user. call Timeline.configure() instead, to make sure the timeline reloads automatically.
@@ -959,9 +995,13 @@ class TimelineEvent {
         this.popupParcel = null;
         this.translations = {};
         this.titleTranslations = {};
+        //Whether the user is hovering over us
         this.hovered = false;
         this.popup = false;
         this.hoverTimeout = null; // Holds the timeout ID
+        // 1 second to start popping out
+        this.popupTime = 1000;
+        this.animationStartTime = null;
         this.text = text;
         this.title = title;
         this.date = date;
@@ -992,7 +1032,7 @@ class TimelineEvent {
         let mouseX = event.clientX - timeline.getLeft();
         let mouseY = event.clientY - timeline.getTop();
         let redrawNeeded = false;
-        let currentlyHovered = this.checkIfPointInBox(mouseX, mouseY);
+        let currentlyHovered = this.checkIfPointInBox(mouseX, mouseY, this.getTrueWidth(timeline.timelineConfig.verticalLayout), this.getTrueHeight(timeline.timelineConfig.verticalLayout));
         if (currentlyHovered && !this.hovered) {
             // Mouse has entered the box, start the timer
             this.hovered = true;
@@ -1002,10 +1042,9 @@ class TimelineEvent {
                 clearTimeout(this.hoverTimeout);
             // Since Javascript browsers have nice support for delayed stuff :)
             this.hoverTimeout = window.setTimeout(() => {
-                console.log("Popping out");
                 this.popup = true;
                 timeline.draw();
-            }, 1500); //Wait for 1.5 seconds
+            }, this.popupTime);
         }
         else if (!currentlyHovered && this.hovered) {
             // Reset everything
@@ -1017,24 +1056,16 @@ class TimelineEvent {
             this.hoverTimeout = null;
             redrawNeeded = true;
         }
+        else if (!currentlyHovered) {
+            // Reset animation state after user un-hovered
+            this.animationStartTime = null;
+        }
         if (redrawNeeded) {
             timeline.draw();
         }
     }
-    /*public onMouseMove(event: MouseEvent, timeline : Timeline) {
-
-        let mouseX = event.clientX - timeline.getLeft();
-        let mouseY = event.clientY - timeline.getTop();
-
-
-        let hovered = this.checkIfPointInBox(mouseX, mouseY);
-        if (hovered != this.hovered) {
-            this.hovered = hovered;
-            timeline.draw();
-        }
-    }*/
-    checkIfPointInBox(x, y) {
-        return (this.x < x && x < this.x + this.width && this.y < y && y < this.y + this.height);
+    checkIfPointInBox(x, y, width, height) {
+        return (this.x < x && x < this.x + width && this.y < y && y < this.y + height);
     }
     invalidateParcel() {
         this.savedParcel = null;
@@ -1058,17 +1089,17 @@ class TimelineEvent {
             height = this.width;
         }
         // Initial setup for horizontal layout
-        let leftBound = x - (this.width / 2);
-        let topBound = flip ? y - this.height - 20 : y + 10; // Adjust based on flip for horizontal layout
-        let headerHeight = this.height / 4;
-        let bodyHeight = this.height * 3 / 4;
-        this.x = leftBound;
-        this.y = topBound;
+        let leftBound = x - (width / 2);
+        let topBound = flip ? y - height - 20 : y + 10; // Adjust based on flip for horizontal layout
+        let headerHeight = height / 4;
+        let bodyHeight = height * 3 / 4;
         // Adjustments for vertical layout
         if (timelineConfig.verticalLayout) {
             leftBound = flip ? x - width - 10 : x + 10; // Move box to left or right of the timeline based on flip
             topBound = y - (height / 2); // Center box vertically around y
         }
+        this.x = leftBound;
+        this.y = topBound;
         // Draw event circle
         context.beginPath();
         context.arc(x * scale, y * scale, 5 * scale, 0, Math.PI * 2);
@@ -1079,21 +1110,21 @@ class TimelineEvent {
             let dateY;
             let justifyY;
             if (timelineConfig.verticalLayout) {
-                dateY = topBound - 30;
+                dateY = topBound;
                 justifyY = LineSide.BOTTOM;
             }
             else {
                 dateY = flip ? y + 10 : y - 10;
                 justifyY = flip ? LineSide.TOP : LineSide.BOTTOM;
             }
-            drawWrappedText(context, scale, this.date.asReadable(timelineConfig), leftBound, dateY, width, headerHeight / 2, 0, Justify.CENTER, justifyY);
+            drawWrappedText(context, scale, this.date.asReadable(timelineConfig), leftBound, dateY, width, headerHeight / 2, 0, Justify.CENTER, Justify.CENTER, justifyY);
         }
         // Draw header
-        drawWrappedText(context, scale, this.getTitle(timelineConfig.userLanguage), leftBound, topBound, width, headerHeight, timelineConfig.padding, Justify.CENTER);
+        drawWrappedText(context, scale, this.getTitle(timelineConfig.userLanguage), leftBound, topBound, width, headerHeight, timelineConfig.padding, Justify.CENTER, Justify.CENTER);
         // Draw body text
         // Calculate it if it hasn't already been calculated
         if (this.savedParcel == null) {
-            this.savedParcel = drawWrappedText(context, scale, this.getBody(timelineConfig.userLanguage), leftBound, topBound + headerHeight, width, bodyHeight, timelineConfig.padding, Justify.LEFT, LineSide.TOP, timelineConfig.maxFontSize, timelineConfig.minFontSize);
+            this.savedParcel = drawWrappedText(context, scale, this.getBody(timelineConfig.userLanguage), leftBound, topBound + headerHeight, width, bodyHeight, timelineConfig.padding, Justify.LEFT, Justify.CENTER, LineSide.TOP, timelineConfig.maxFontSize, timelineConfig.minFontSize);
         }
         // Or just use parcel if we have it
         else {
@@ -1116,59 +1147,117 @@ class TimelineEvent {
         if (this.popup) {
             const config = timeline.timelineConfig;
             const scale = timeline.resolutionScale;
-            //Get the parcelized box
+            //Get the parcelized box if we don't already have it
             if (!this.popupParcel) {
-                this.popupParcel = minimumParcelizedBox(config.verticalLayout ? this.height : this.width, config.verticalLayout ? this.width : this.height, context, scale, config.maxFontSize, config.padding, this.getBody(config.userLanguage));
-                //this.popupParcel = parcelizeText(context, timeline.resolutionScale, this.getBody(timeline.timelineConfig.userLanguage), )
+                this.popupParcel = minimumParcelizedBox(this.getTrueWidth(config.verticalLayout), this.getTrueHeight(config.verticalLayout), context, scale, config.maxFontSize, config.fitExpansionRate, config.padding, this.getBody(config.userLanguage));
             }
+            if (this.animationStartTime === null) {
+                this.animationStartTime = performance.now();
+            }
+            let now = performance.now();
+            let elapsed = now - this.animationStartTime;
+            let progress = Math.min(elapsed / config.popupTime, 1); // Ensure progress doesn't exceed 1
             let position = this.getPopupPosition(timeline, this.popupParcel);
-            // Draw popup
+            let targetWidth = this.popupParcel.width;
+            let targetHeight = this.popupParcel.height;
+            let currentWidth = targetWidth * progress;
+            let currentHeight = targetHeight * progress;
+            let truePosition = { x: position.x + (currentWidth * position.horizontalMultiplier), y: position.y + (currentHeight * position.verticalMultiplier) };
+            // Draw popup with current size
             context.beginPath();
             context.fillStyle = "white";
-            context.fillRect(position.x * scale, position.y * scale, this.popupParcel.width * scale, this.popupParcel.height * scale);
+            context.fillRect(truePosition.x * scale, truePosition.y * scale, currentWidth * scale, currentHeight * scale);
             context.fillStyle = "black";
-            context.strokeRect(position.x * scale, position.y * scale, this.popupParcel.width * scale, this.popupParcel.height * scale);
-            context.fillStyle = config.highlightColor;
-            drawWrappedTextPrecalculated(context, timeline.resolutionScale, position.x, position.y, this.popupParcel.width, this.popupParcel.height, this.popupParcel.text, config.padding);
+            context.strokeRect(truePosition.x * scale, truePosition.y * scale, currentWidth * scale, currentHeight * scale);
+            // Continue the animation if not complete
+            if (progress < 1) {
+                requestAnimationFrame(() => timeline.draw()); // Redraw the canvas
+            }
+            else {
+                context.fillStyle = config.highlightColor;
+                drawWrappedTextPrecalculated(context, timeline.resolutionScale, truePosition.x, truePosition.y, this.popupParcel.width, this.popupParcel.height, this.popupParcel.text, config.padding);
+            }
         }
+        /*const scale = timeline.resolutionScale
+
+
+
+        context.fillStyle = "blue";
+
+        // Draw event circle
+        context.beginPath();
+        context.arc(this.x * scale, this.y * scale, 5 * scale, 0, Math.PI * 2);
+        context.fill();
+        context.lineWidth = 5;
+        context.strokeStyle = "blue";
+        context.strokeRect(this.x * scale, this.y * scale, this.width * scale, this.height * scale);*/
     }
     /*is_hovered(x: number, y: number) {
         return (x > this.x - this.width / 2 && x < this.x + this.width / 2 && y > this.y + 10 && y < this.y + this.height + 10);
     }*/
-    getPopupPosition(timeline, popupParcel) {
+    /*
+    private getPopupPositionOld(timeline: Timeline, popupParcel: ParcelizedTextBox): { x: number; y: number } {
         const canvasWidth = timeline.getWidth();
         const canvasHeight = timeline.getHeight();
+
         // Coordinates of the event card
         const cardTop = this.y;
-        const cardBottom = this.y + this.height;
+        const cardBottom = this.y + (timeline.timelineConfig.verticalLayout? this.width: this.height);
         const cardLeft = this.x;
-        const cardRight = this.x + this.width;
+        const cardRight = this.x + (timeline.timelineConfig.verticalLayout? this.height: this.width);
+
         // Possible positions for the popup
         let bestX = this.x; // Initialize with default as the top-right corner of the card
         let bestY = this.y;
+
         // Check space on the right side
         if (cardRight + popupParcel.width <= canvasWidth) {
             bestX = cardRight; // Align popup's left edge with card's right edge
-            bestY = cardTop; // Align popup's top edge with card's top edge
-        }
-        else if (cardLeft - popupParcel.width >= 0) {
+            bestY = cardTop;  // Align popup's top edge with card's top edge
+        } else if (cardLeft - popupParcel.width >= 0) {
             // Not enough space on the right, check the left side
             bestX = cardLeft - popupParcel.width; // Align popup's right edge with card's left edge
-            bestY = cardTop; // Align popup's top edge with card's top edge
-        }
-        else if (cardBottom + popupParcel.height <= canvasHeight) {
+            bestY = cardTop;                      // Align popup's top edge with card's top edge
+        } else if (cardBottom + popupParcel.height <= canvasHeight) {
             // Not enough space on the left, check below
-            bestX = cardLeft; // Align popup's left edge with card's left edge
-            bestY = cardBottom; // Align popup's top edge with card's bottom edge
-        }
-        else if (cardTop - popupParcel.height >= 0) {
+            bestX = cardLeft;                    // Align popup's left edge with card's left edge
+            bestY = cardBottom;                  // Align popup's top edge with card's bottom edge
+        } else if (cardTop - popupParcel.height >= 0) {
             // Not enough space below, check above
-            bestX = cardLeft; // Align popup's left edge with card's left edge
+            bestX = cardLeft;                    // Align popup's left edge with card's left edge
             bestY = cardTop - popupParcel.height; // Align popup's bottom edge with card's top edge
         }
+
         // Ensure popup is completely inside the canvas
         bestX = Math.max(0, Math.min(bestX, canvasWidth - popupParcel.width));
         bestY = Math.max(0, Math.min(bestY, canvasHeight - popupParcel.height));
+
         return { x: bestX, y: bestY };
+    }
+    */
+    getPopupPosition(timeline, popupParcel) {
+        const canvasWidth = timeline.getWidth();
+        const canvasHeight = timeline.getHeight();
+        let posX = this.x + this.getTrueWidth(timeline.timelineConfig.verticalLayout); // Default: to the right of the card
+        let posY = this.y; // Aligns top of the popup with top of the card
+        let verticalMultiplier = 0; // Default below the card
+        let horizontalMultiplier = 0; // Default to the right of the card
+        // Check if the popup fits to the right; if not, flip to the left
+        if (posX + popupParcel.width > canvasWidth) {
+            posX = this.x; // Align the right of the popup with the right of the card
+            horizontalMultiplier = -1;
+        }
+        // Check if the popup fits below; if not, flip above
+        if (posY + popupParcel.height > canvasHeight) {
+            posY = this.y + this.getTrueHeight(timeline.timelineConfig.verticalLayout); // Align bottom of the popup with bottom of the card
+            verticalMultiplier = -1;
+        }
+        return { x: posX, y: posY, verticalMultiplier: verticalMultiplier, horizontalMultiplier: horizontalMultiplier };
+    }
+    getTrueHeight(verticalLayout) {
+        return (verticalLayout ? this.width : this.height);
+    }
+    getTrueWidth(verticalLayout) {
+        return (verticalLayout ? this.height : this.width);
     }
 }

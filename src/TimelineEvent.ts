@@ -12,6 +12,21 @@ class TimelineEvent {
     private readonly translations : object = {};
     private readonly titleTranslations : object = {};
 
+
+    //Whether the user is hovering over us
+    private hovered: boolean = false;
+
+
+    private popup: boolean = false;
+    private hoverTimeout: number | null = null; // Holds the timeout ID
+
+    // 1 second to start popping out
+    private popupTime = 1000;
+
+    private animationStartTime: number | null = null;
+
+
+
     constructor(text : string, title : string, date : ParsedDate, titleTranslations: object, translations: object) {
         this.text = text;
         this.title = title;
@@ -41,16 +56,9 @@ class TimelineEvent {
         }
 
         return this.text
-
-
     }
 
 
-    private hovered: boolean = false;
-
-
-    private popup: boolean = false;
-    private hoverTimeout: number | null = null; // Holds the timeout ID
 
     public onMouseMove(event: MouseEvent, timeline: Timeline) {
         let mouseX = event.clientX - timeline.getLeft();
@@ -58,7 +66,10 @@ class TimelineEvent {
 
         let redrawNeeded: boolean = false;
 
-        let currentlyHovered = this.checkIfPointInBox(mouseX, mouseY);
+        let currentlyHovered = this.checkIfPointInBox(mouseX, mouseY,
+            this.getTrueWidth(timeline.timelineConfig.verticalLayout),
+            this.getTrueHeight(timeline.timelineConfig.verticalLayout),
+            );
 
 
         if (currentlyHovered && !this.hovered) {
@@ -69,10 +80,9 @@ class TimelineEvent {
             if (this.hoverTimeout) clearTimeout(this.hoverTimeout);
             // Since Javascript browsers have nice support for delayed stuff :)
             this.hoverTimeout = window.setTimeout(() => {
-                console.log("Popping out");
                 this.popup = true;
                 timeline.draw();
-            }, 1500); //Wait for 1.5 seconds
+            }, this.popupTime);
         } else if (!currentlyHovered && this.hovered) {
             // Reset everything
             this.hovered = false;
@@ -83,29 +93,18 @@ class TimelineEvent {
             this.hoverTimeout = null;
             redrawNeeded = true;
         }
+        else if (!currentlyHovered) {
+            // Reset animation state after user un-hovered
+            this.animationStartTime = null;
+        }
 
         if (redrawNeeded) {
             timeline.draw();
         }
     }
 
-    /*public onMouseMove(event: MouseEvent, timeline : Timeline) {
-
-        let mouseX = event.clientX - timeline.getLeft();
-        let mouseY = event.clientY - timeline.getTop();
-
-
-        let hovered = this.checkIfPointInBox(mouseX, mouseY);
-        if (hovered != this.hovered) {
-            this.hovered = hovered;
-            timeline.draw();
-        }
-    }*/
-
-
-
-    private checkIfPointInBox(x: number, y: number) : boolean {
-        return (this.x < x && x < this.x + this.width && this.y < y && y < this.y + this.height);
+    private checkIfPointInBox(x: number, y: number, width: number, height: number) : boolean {
+        return (this.x < x && x < this.x + width && this.y < y && y < this.y + height);
     }
 
     public invalidateParcel() {
@@ -134,19 +133,22 @@ class TimelineEvent {
         }
 
         // Initial setup for horizontal layout
-        let leftBound = x - (this.width / 2);
-        let topBound = flip ? y - this.height - 20 : y + 10; // Adjust based on flip for horizontal layout
-        let headerHeight = this.height / 4;
-        let bodyHeight = this.height * 3 / 4;
+        let leftBound = x - (width / 2);
+        let topBound = flip ? y - height - 20 : y + 10; // Adjust based on flip for horizontal layout
+        let headerHeight = height / 4;
+        let bodyHeight = height * 3 / 4;
 
-        this.x = leftBound;
-        this.y = topBound;
 
         // Adjustments for vertical layout
         if (timelineConfig.verticalLayout) {
             leftBound = flip ? x - width - 10 : x + 10; // Move box to left or right of the timeline based on flip
             topBound = y - (height / 2); // Center box vertically around y
         }
+
+
+        this.x = leftBound;
+        this.y = topBound;
+
 
         // Draw event circle
         context.beginPath();
@@ -159,18 +161,18 @@ class TimelineEvent {
             let dateY: number;
             let justifyY: LineSide;
             if (timelineConfig.verticalLayout) {
-                dateY = topBound - 30;
+                dateY = topBound;
                 justifyY = LineSide.BOTTOM;
             }
             else {
                 dateY = flip ? y + 10 : y - 10;
                 justifyY = flip ? LineSide.TOP : LineSide.BOTTOM;
             }
-            drawWrappedText(context, scale, this.date.asReadable(timelineConfig), leftBound, dateY, width, headerHeight / 2, 0, Justify.CENTER, justifyY);
+            drawWrappedText(context, scale, this.date.asReadable(timelineConfig), leftBound, dateY, width, headerHeight / 2, 0, Justify.CENTER, Justify.CENTER, justifyY);
         }
 
         // Draw header
-        drawWrappedText(context, scale, this.getTitle(timelineConfig.userLanguage), leftBound, topBound, width, headerHeight, timelineConfig.padding, Justify.CENTER);
+        drawWrappedText(context, scale, this.getTitle(timelineConfig.userLanguage), leftBound, topBound, width, headerHeight, timelineConfig.padding, Justify.CENTER, Justify.CENTER);
 
         // Draw body text
         // Calculate it if it hasn't already been calculated
@@ -185,6 +187,7 @@ class TimelineEvent {
                 bodyHeight,
                 timelineConfig.padding,
                 Justify.LEFT,
+                Justify.CENTER,
                 LineSide.TOP,
                 timelineConfig.maxFontSize,
                 timelineConfig.minFontSize,
@@ -224,59 +227,102 @@ class TimelineEvent {
     //Draw the popup only after all other things have been drawn
     drawLate(context: CanvasRenderingContext2D, timeline: Timeline) {
 
+
+
+
         if (this.popup) {
             const config = timeline.timelineConfig;
             const scale = timeline.resolutionScale
 
-            //Get the parcelized box
+            //Get the parcelized box if we don't already have it
             if (!this.popupParcel) {
                 this.popupParcel = minimumParcelizedBox(
-                    config.verticalLayout? this.height: this.width,
-                    config.verticalLayout? this.width: this.height,
+                    this.getTrueWidth(config.verticalLayout),
+                    this.getTrueHeight(config.verticalLayout),
                     context,
                     scale,
                     config.maxFontSize,
+                    config.fitExpansionRate,
                     config.padding,
                     this.getBody(config.userLanguage)
                 );
-                //this.popupParcel = parcelizeText(context, timeline.resolutionScale, this.getBody(timeline.timelineConfig.userLanguage), )
             }
 
+
+
+
+
+
+            if (this.animationStartTime === null) {
+                this.animationStartTime = performance.now();
+            }
+
+            let now = performance.now();
+            let elapsed = now - this.animationStartTime;
+            let progress = Math.min(elapsed / config.popupTime, 1); // Ensure progress doesn't exceed 1
+
             let position = this.getPopupPosition(timeline, this.popupParcel);
+            let targetWidth = this.popupParcel.width;
+            let targetHeight = this.popupParcel.height;
+            let currentWidth = targetWidth * progress;
+            let currentHeight = targetHeight * progress;
 
+            let truePosition: { x: number, y: number} = { x: position.x + (currentWidth * position.horizontalMultiplier), y: position.y + (currentHeight * position.verticalMultiplier) };
 
-
-            // Draw popup
+            // Draw popup with current size
             context.beginPath();
             context.fillStyle = "white";
-            context.fillRect(position.x * scale, position.y * scale,  this.popupParcel.width * scale, this.popupParcel.height * scale);
+            context.fillRect(truePosition.x * scale, truePosition.y * scale, currentWidth * scale, currentHeight * scale);
             context.fillStyle = "black";
-            context.strokeRect(position.x * scale, position.y * scale,  this.popupParcel.width * scale, this.popupParcel.height * scale);
+            context.strokeRect(truePosition.x * scale, truePosition.y * scale, currentWidth * scale, currentHeight * scale);
 
-
-
-            context.fillStyle = config.highlightColor;
-            drawWrappedTextPrecalculated(context, timeline.resolutionScale, position.x, position.y, this.popupParcel.width, this.popupParcel.height, this.popupParcel.text, config.padding);
-
-
+            // Continue the animation if not complete
+            if (progress < 1) {
+                requestAnimationFrame(() => timeline.draw()); // Redraw the canvas
+            } else {
+                context.fillStyle = config.highlightColor;
+                drawWrappedTextPrecalculated(context, timeline.resolutionScale, truePosition.x, truePosition.y, this.popupParcel.width, this.popupParcel.height, this.popupParcel.text, config.padding);
+            }
         }
+
+
+        /*const scale = timeline.resolutionScale
+
+
+
+        context.fillStyle = "blue";
+
+        // Draw event circle
+        context.beginPath();
+        context.arc(this.x * scale, this.y * scale, 5 * scale, 0, Math.PI * 2);
+        context.fill();
+        context.lineWidth = 5;
+        context.strokeStyle = "blue";
+        context.strokeRect(this.x * scale, this.y * scale, this.width * scale, this.height * scale);*/
+
+
+
     }
+
+
+
+
 
 
     /*is_hovered(x: number, y: number) {
         return (x > this.x - this.width / 2 && x < this.x + this.width / 2 && y > this.y + 10 && y < this.y + this.height + 10);
     }*/
 
-
-    private getPopupPosition(timeline: Timeline, popupParcel: ParcelizedTextBox): { x: number; y: number } {
+    /*
+    private getPopupPositionOld(timeline: Timeline, popupParcel: ParcelizedTextBox): { x: number; y: number } {
         const canvasWidth = timeline.getWidth();
         const canvasHeight = timeline.getHeight();
 
         // Coordinates of the event card
         const cardTop = this.y;
-        const cardBottom = this.y + this.height;
+        const cardBottom = this.y + (timeline.timelineConfig.verticalLayout? this.width: this.height);
         const cardLeft = this.x;
-        const cardRight = this.x + this.width;
+        const cardRight = this.x + (timeline.timelineConfig.verticalLayout? this.height: this.width);
 
         // Possible positions for the popup
         let bestX = this.x; // Initialize with default as the top-right corner of the card
@@ -306,6 +352,38 @@ class TimelineEvent {
 
         return { x: bestX, y: bestY };
     }
+    */
+
+    getPopupPosition(timeline: Timeline, popupParcel : ParcelizedTextBox): { x: number, y: number, verticalMultiplier: number, horizontalMultiplier: number} {
+        const canvasWidth = timeline.getWidth();
+        const canvasHeight = timeline.getHeight();
+
+        let posX = this.x + this.getTrueWidth(timeline.timelineConfig.verticalLayout);  // Default: to the right of the card
+        let posY = this.y;               // Aligns top of the popup with top of the card
+        let verticalMultiplier = 0;      // Default below the card
+        let horizontalMultiplier = 0;    // Default to the right of the card
+
+        // Check if the popup fits to the right; if not, flip to the left
+        if (posX + popupParcel.width > canvasWidth) {
+            posX = this.x;  // Align the right of the popup with the right of the card
+            horizontalMultiplier = -1;
+        }
+
+        // Check if the popup fits below; if not, flip above
+        if (posY + popupParcel.height > canvasHeight) {
+            posY = this.y + this.getTrueHeight(timeline.timelineConfig.verticalLayout); // Align bottom of the popup with bottom of the card
+            verticalMultiplier = -1;
+        }
+
+        return { x: posX, y: posY, verticalMultiplier: verticalMultiplier, horizontalMultiplier: horizontalMultiplier };
+    }
 
 
+    private getTrueHeight(verticalLayout: boolean) : number {
+        return (verticalLayout? this.width: this.height)
+    }
+
+    private getTrueWidth(verticalLayout: boolean) : number {
+        return (verticalLayout? this.height: this.width)
+    }
 }

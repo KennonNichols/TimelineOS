@@ -1,22 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Timeline Example</title>
+    <title>Timeline Playground</title>
+
+
+    <script src="Source.js"></script>
+
+    <style>
+        #timelineCanvas {
+            //margin: auto;
+            height: 90vh;
+            width: 90vw;
+            max-height: 600px;
+            max-width: 800px;
+        }
+    </style>
 </head>
+<body>
 
-<script src="Source.js"></script>
-
-<style>
-    #timelineCanvas {
-        //margin: auto;
-        height: 90vh;
-        width: 90vw;
-        max-height: 600px;
-        max-width: 800px;
-    }
-</style>
 
 
 <canvas id="timelineCanvas" style="border:1px solid #000000;"></canvas>
+
 
 <br/>
 <br/>
@@ -34,48 +40,73 @@
 <button id="deleteEventButton">Delete event</button>
 <br/>
 <br/>
-<label for="configureField">JSON configuration</label>
-<br/>
-<textarea autocomplete="off" autocapitalize="off" spellcheck="false" id="configureField" style="width:250px" rows = "20">{
-"eventCount" : 3,
-"actualScale" : false,
-"verticalLayout" : true,
-"layoutTechnique" : "mixed",
-"padding" : 4,
-"drawDividerLine" : false,
-"highlightColor" : "blue",
-"dateSort" : false,
-"metricDateFormat" : true,
-"metricTimeFormat" : true,
-"languageDateFormat" : true,
-"resolutionScale" : 1,
-"maxFontSize" : 20,
-"minFontSize" : 12,
-"popupTime" : 0
-}</textarea>
-<br/>
-<button id="configureButton">Configure timeline</button>
-<br/>
-<br/>
-<label for="dateTestField">Date</label>
-<input id="dateTestField" type="text"/>
-<button id="dateTestButton">-> Convert Date-></button>
-<input readonly="readonly" id="dateTestFieldOut" type="text"/>
-<br/>
-<input type="radio" id="24hourTimeFormat" name="time_format" value=true checked>
-<label for="24hourTimeFormat">24-hour</label>
-<input type="radio" id="12hour" name="time_format" value=false>
-<label for="12hour">12-hour</label>
-<br/>
-<input type="radio" id="metricDateFormat" name="date_format" value=true>
-<label for="metricDateFormat">Metric</label>
-<input type="radio" id="standard" name="date_format" value=false checked>
-<label for="standard">American Standard</label>
-<br/>
-<input type="radio" id="fullTextDateFormat" name="date_language_format" value=true>
-<label for="fullTextDateFormat">Full-text</label>
-<input type="radio" id="numerical" name="date_language_format" value=false checked>
-<label for="numerical">Numerical</label>
+<form id="configForm">
+    <label for="eventCount">Event Count:</label>
+    <input type="number" id="eventCount" name="eventCount" min="1" max="5" value="1">
+
+    <label for="actualScale">Actual Scale:</label>
+    <input type="checkbox" id="actualScale" name="actualScale">
+
+    <label for="verticalLayout">Vertical Layout:</label>
+    <input type="checkbox" id="verticalLayout" name="verticalLayout">
+
+    <label for="padding">Padding:</label>
+    <input type="number" id="padding" name="padding" min="0">
+
+    <label for="drawDividerLine">Draw Divider Line:</label>
+    <input type="checkbox" id="drawDividerLine" name="drawDividerLine">
+
+    <label for="highlightColor">Highlight Color:</label>
+    <input type="color" id="highlightColor" name="highlightColor">
+
+    <label for="dateSort">Date Sort:</label>
+    <input type="checkbox" id="dateSort" name="dateSort">
+
+    <label for="metricDateFormat">Metric Date Format:</label>
+    <input type="checkbox" id="metricDateFormat" name="metricDateFormat">
+
+    <label for="metricTimeFormat">Metric Time Format:</label>
+    <input type="checkbox" id="metricTimeFormat" name="metricTimeFormat">
+
+    <label for="languageDateFormat">Language Date Format:</label>
+    <input type="checkbox" id="languageDateFormat" name="languageDateFormat">
+
+    <label for="layoutTechnique">Layout Technique:</label><br>
+    <input type="radio" id="normal" name="layoutTechnique" value="normal">
+    <label for="normal">Normal</label><br>
+    <input type="radio" id="vertical" name="layoutTechnique" value="vertical">
+    <label for="vertical">Vertical</label><br>
+    <input type="radio" id="mixed" name="layoutTechnique" value="mixed">
+    <label for="mixed">Mixed</label><br>
+
+    <label for="resolutionScale">Resolution Scale:</label>
+    <input type="number" id="resolutionScale" name="resolutionScale" min="1" max="5" value="1">
+
+    <label for="maxFontSize">Max Font Size:</label>
+    <input type="number" id="maxFontSize" name="maxFontSize" min="1">
+
+    <label for="minFontSize">Min Font Size:</label>
+    <input type="number" id="minFontSize" name="minFontSize" min="1">
+
+    <label for="popupTime">Popup Time:</label>
+    <input type="number" id="popupTime" name="popupTime" min="0">
+
+    <button type="submit">Submit</button>
+</form>
+
+
+
+
+</body>
+</html>
+
+
+
+
+
+
+
+
 
 
 <script>
@@ -137,27 +168,39 @@
         timeline.addEvent(document.getElementById("newTitleField").value, document.getElementById("newBodyField").value, document.getElementById("newDateField").value);
     });
 
-    document.getElementById("configureButton").addEventListener("click", function() {
-        timeline.configure(document.getElementById("configureField").value);
+
+    document.getElementById("configForm").addEventListener("submit", function(event) {
+        event.preventDefault(); // Prevent default form submission
+
+        // Initialize empty configuration object
+        let config = {};
+
+        // Loop through form fields and add filled values to the config object
+        Array.from(this.elements).forEach(function(element) {
+            if (element.type !== "submit" && element.value.trim() !== "") {
+                if (element.type === 'radio') {
+                    if (element.checked) {
+                        config[element.name] = element.value;
+                    }
+                }
+                // For color picker input, get value from value attribute
+                else if (element.type === "color") {
+                    config[element.name] = element.value;
+                } else {
+                    config[element.name] = element.type === "checkbox" ? element.checked : parseInt(element.value);
+                }
+            }
+        });
+
+
+        // Reconfigure the timeline
+        timeline.configure(JSON.stringify(config));
+
+        // Reset the form fields
+        autofillForm(timeline.timelineConfig);
     });
 
-    document.getElementById("dateTestButton").addEventListener("click", function() {
 
-        const date = parseDate(document.getElementById("dateTestField").value);
-
-        const timelineConfig = new TimelineConfig();
-
-        timelineConfig.reconfigure(
-            `{
-                "metricDateFormat" : ${document.getElementById("metricDateFormat").checked},
-                "metricTimeFormat" : ${document.getElementById("24hourTimeFormat").checked},
-                "languageDateFormat" : ${document.getElementById("fullTextDateFormat").checked}
-                }`
-        );
-
-        document.getElementById("dateTestFieldOut").value = date.asReadable(timelineConfig);
-        console.log(date.year);
-    });
 
 
     //Some code to make sure the canvas is resized with the view
@@ -170,4 +213,31 @@
 
         timeline.resize();
     });
+
+
+
+    function autofillForm() {
+        const timelineConfig = timeline.timelineConfig;
+
+        document.getElementById('eventCount').value = timelineConfig.eventCount;
+        document.getElementById('actualScale').checked = timelineConfig.actualScale;
+        document.getElementById('verticalLayout').checked = timelineConfig.verticalLayout;
+        document.getElementById('padding').value = timelineConfig.padding;
+        document.getElementById('drawDividerLine').checked = timelineConfig.drawDividerLine;
+        document.getElementById('highlightColor').value = timelineConfig.highlightColor;
+        document.getElementById('dateSort').checked = timelineConfig.dateSort;
+        document.getElementById('metricDateFormat').checked = timelineConfig.metricDateFormat;
+        document.getElementById('metricTimeFormat').checked = timelineConfig.metricTimeFormat;
+        document.getElementById('languageDateFormat').checked = timelineConfig.languageDateFormat;
+        document.querySelector(`input[name="layoutTechnique"][value="${timelineConfig.layoutTechnique}"]`).checked = true;
+        document.getElementById('resolutionScale').value = timelineConfig.resolutionScale;
+        document.getElementById('maxFontSize').value = timelineConfig.maxFontSize;
+        document.getElementById('minFontSize').value = timelineConfig.minFontSize;
+        document.getElementById('popupTime').value = timelineConfig.popupTime;
+    }
+
+
+    //Autofill with default values
+    document.addEventListener('DOMContentLoaded', autofillForm);
+
 </script>

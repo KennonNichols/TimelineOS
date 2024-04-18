@@ -1,3 +1,4 @@
+
 class Timeline {
 
 
@@ -28,11 +29,43 @@ class Timeline {
 
         this.scaleCanvas();
         this.reloadTimeline(true, true);
+
+
+
+        /*let query = {
+        "q": [
+            "This should translate automatically."
+        ],
+        "target" : "${this.timelineConfig.userLanguage}"
+        
+        };
+
+        let apiUrl = 'https://translation.googleapis.com/language/translate/v2';
+
+        fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer ' + accessToken,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(query);
+        })
+            .then(response => response.json())
+            .then(data => console.log(data))
+            .catch(error => console.error('Error:', error));
+
+        //console.log()*/
+
     }
 
     configure(json : string) {
         let needsResetting: boolean = this.timelineConfig.reconfigure(json);
         this.reloadTimeline(needsResetting, needsResetting);
+    }
+
+    public resize() {
+        this.resizeEvents();
+        this.reloadTimeline(true, true);
     }
 
     get resolutionScale(): number {
@@ -400,9 +433,11 @@ class Timeline {
         let startingPoint: Point;
 
         if (this.timelineConfig.verticalLayout) {
-            startingPoint = Point.add(this.shift, new Point(this.getWidth() / 2, this.getStandardYStep() / 2));
+            // Full y step in vertical
+            startingPoint = Point.add(this.shift, new Point(this.getWidth() / 2, this.getStandardYStep()));
         }
         else {
+            // Only half a step in horizontal
             startingPoint = Point.add(this.shift, new Point(this.getStandardXStep() / 2, this.getHeight() / 2));
         }
 
