@@ -419,8 +419,8 @@ function extractYear(input) {
         }
         else {
             let possiblePrefix = input.slice(Math.max(0, startIndex - 5), startIndex + 1);
-            //Check for BC prefix
-            const bcMatch = containsBCPrefix(possiblePrefix);
+            //Check for BC prefix, or if it's just negative
+            const bcMatch = containsBCPrefix(possiblePrefix) || possiblePrefix.slice(-1) == '-';
             if (bcMatch) {
                 isNegative = true;
                 break;
@@ -901,7 +901,6 @@ class TimelineConfig {
         // Number of events that are shown per canvas width
         this.eventCount = 5;
         // Whether to scale the space between events to match dates
-        // TODO implement this
         this.actualScale = false;
         // Whether we are drawing vertically
         this.verticalLayout = false;
@@ -927,7 +926,7 @@ class TimelineConfig {
         this.maxFontSize = 16;
         // Same thing.
         this.minFontSize = 12;
-        // Time it takes (in milliseconds) for the timeline popups to expand to full size.
+        // Time it takes (in milliseconds) for the timeline popups to expand to full size. A value of 0 disables popups entirely
         this.popupTime = 500;
         // "Developer" values. These are values that affect internal functions. Improper config can break the site, and it is unlikely you will ever need to tweak these. Here be dragons.
         // This is the factor by which a box is increased to find the box of best fit around text. For example, when finding the smallest possible box that can fit a piece of text.

@@ -345,8 +345,8 @@ function extractYear(input: string): number | null {
             startIndex--;
         } else {
             let possiblePrefix : string = input.slice(Math.max(0, startIndex - 5), startIndex + 1);
-            //Check for BC prefix
-            const bcMatch = containsBCPrefix(possiblePrefix);
+            //Check for BC prefix, or if it's just negative
+            const bcMatch = containsBCPrefix(possiblePrefix) || possiblePrefix.slice(-1) == '-';
             if (bcMatch) {
                 isNegative = true;
                 break;
